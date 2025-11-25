@@ -1,4 +1,4 @@
-import { gql } from 'apollo-server-express';
+import gql from 'graphql-tag';
 
 // Base schema with root Query and Mutation types
 const baseTypeDefs = gql`
