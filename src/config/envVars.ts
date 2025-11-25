@@ -3,7 +3,7 @@ import path from 'path';
 import { z } from 'zod';
 
 // Load .env file
-dotenv.config({ path: path.join(__dirname, '../../.env') });
+dotenv.config({ path: path.join(process.cwd(), '.env') });
 
 // Define schema for environment variables
 const envSchema = z.object({
@@ -12,6 +12,8 @@ const envSchema = z.object({
   DATABASE_URL: z.string({
     required_error: 'DATABASE_URL is required in .env file',
   }),
+  REDIS_HOST: z.string().default('localhost'),
+  REDIS_PORT: z.string().default('6379'),
 });
 
 // Parse and validate environment variables

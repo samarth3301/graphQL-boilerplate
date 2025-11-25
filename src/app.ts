@@ -1,37 +1,66 @@
-import express, { Application } from 'express'
-import morgan from 'morgan';
-import cors from 'cors';
-import { ApolloServer } from 'apollo-server-express';
-import envVars from './config/envVars';
-import { logger } from './config/logger';
-import { typeDefs } from './api/typeDefs';
-import { errorConverter, errorHandler } from './handlers/error.handler';
-import { resolvers } from './api/resolvers';
+import fastify from 'fastify';
+import cors from '@fastify/cors';
+import compression from '@fastify/compress';
+import { createYoga } from 'graphql-yoga';
+import { schema } from './api/schema.js';
+import { createContext } from './context.js';
+import envVars from './config/envVars.js';
+import { logger } from './config/logger.js';
+import { errorHandler } from './handlers/error.handler.js';
 
 async function startServer() {
-    const app: Application = express()
+  const app = fastify({
+    logger: logger,
+    disableRequestLogging: true, // We'll handle logging manually
+  });
 
-    app.use(cors())
-    app.use(morgan('dev'))
-    app.use(express.json())
+  // Register plugins
+  await app.register(cors);
+  await app.register(compression, { encodings: ['gzip', 'deflate'] });
 
-    const server = new ApolloServer({
-        typeDefs: typeDefs,
-        resolvers: resolvers,
-        persistedQueries: false, // Disable persisted queries for simplicity
-    });
-    
-    await server.start();
-    server.applyMiddleware({ app: app as any, path: '/graphql' });
-    
-    // Apply error handling middleware after all routes
-    app.use(errorConverter)
-    app.use(errorHandler)
+  // Health check
+  app.get('/health', async () => ({ status: 'ok' }));
 
-    app.listen(envVars.PORT, () => {
-        logger.info(`🚀 Server is running in ${envVars.NODE_ENV} mode on port ${envVars.PORT}`);
-        logger.info(`📊 GraphQL endpoint: http://localhost:${envVars.PORT}${server.graphqlPath}`);
-    });
+  // Create Yoga instance
+  const yoga = createYoga({
+    schema,
+    logging: logger,
+    context: createContext,
+    // Add envelop plugins for optimization
+    plugins: [
+      // Add rate limiting, data loader, etc. here
+    ],
+  });
+
+  // Mount Yoga on /graphql
+  app.route({
+    url: yoga.graphqlEndpoint,
+    method: ['GET', 'POST', 'OPTIONS'],
+    handler: async (req, reply) => {
+      const response = await yoga.handleNodeRequest(req, {
+        req,
+        reply,
+      });
+      for (const [name, value] of response.headers) {
+        reply.header(name, value);
+      }
+      reply.status(response.status);
+      reply.send(response.body);
+      return reply;
+    },
+  });
+
+  // Error handler
+  app.setErrorHandler(errorHandler);
+
+  try {
+    app.listen({ port: parseInt(envVars.PORT, 10), host: '0.0.0.0' });
+    logger.info(`🚀 Server is running in ${envVars.NODE_ENV} mode on port ${envVars.PORT}`);
+    logger.info(`📊 GraphQL endpoint: http://localhost:${envVars.PORT}${yoga.graphqlEndpoint}`);
+  } catch (err) {
+    logger.error(err);
+    process.exit(1);
+  }
 }
 
 export default startServer;
