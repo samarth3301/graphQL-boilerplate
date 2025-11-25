@@ -15,7 +15,9 @@
       "tsconfig.json",
       ".vscode",
       ".idea",
-      "templates"
+      "templates",
+      "dist/",
+      "generated/"
     ]
   },
   "formatter": {
