@@ -15,16 +15,24 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     logging: *default-logging
+    depends_on:
+      - redis
     networks:
       - default
 
   redis:
-    image: redis:latest
+    image: redis:7-alpine
     ports:
       - "127.0.0.1:6379:6379"
     logging: *default-logging
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
     networks:
       - default
+
+volumes:
+  redis-data:
 
 networks:
   default:
